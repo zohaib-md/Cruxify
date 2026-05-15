@@ -23,8 +23,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val geminiKey = properties.getProperty("GEMINI_API_KEY").orEmpty()
-        buildConfigField("String", "GEMINI_API_KEY", "\"${geminiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        val anthropicKey = properties.getProperty("ANTHROPIC_API_KEY").orEmpty()
+        buildConfigField("String", "ANTHROPIC_API_KEY", "\"${anthropicKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     buildTypes {
@@ -63,7 +63,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation("com.google.ai.client.generativeai:generativeai:0.6.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")// ViewModel integration for Compose
 
     implementation("com.github.jeziellago:compose-markdown:0.5.8") //for formatting the ai gen o/p

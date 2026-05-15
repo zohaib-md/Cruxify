@@ -1,19 +1,14 @@
-
-//This file will hold the state of our UI and manage the
-// asynchronous call to the Gemini model so it doesn't freeze the screen while thinking.
 package com.project.cruxify
-
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
+import com.project.cruxify.data.AnthropicClient
+import com.project.cruxify.data.YouTubeTranscriptFetcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// Define the four possible states of our screen
 sealed interface CruxUiState {
     object Idle : CruxUiState
     object Loading : CruxUiState
@@ -25,11 +20,7 @@ class CruxifyViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<CruxUiState>(CruxUiState.Idle)
     val uiState: StateFlow<CruxUiState> = _uiState.asStateFlow()
 
-    // Initialize the Gemini 2.5 Flash model securely using BuildConfig
-    private val generativeModel = GenerativeModel(
-        modelName = "gemini-2.5-flash",
-        apiKey = BuildConfig.GEMINI_API_KEY
-    )
+    private val anthropic = AnthropicClient()
 
     fun resetState() {
         _uiState.value = CruxUiState.Idle
@@ -42,35 +33,34 @@ class CruxifyViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                // The Master Prompt (text instruction)
-                val promptText = """
+                val videoId = YouTubeTranscriptFetcher.extractVideoId(youtubeUrl)
+                    ?: throw IllegalArgumentException("Invalid YouTube URL")
+
+                val transcript = YouTubeTranscriptFetcher.fetchTranscript(youtubeUrl)
+
+                val systemPrompt = """
                     You are Cruxify, an AI specialized in extracting the essential core of video content.
-                    Watch and analyze the provided video carefully.
-                    
+                    You receive a timestamped transcript from a YouTube video. Base your answer only on that transcript.
+
                     Provide:
                     1. **🎯 The Crux**: A one-sentence main takeaway.
                     2. **📋 Structured Summary**: A detailed summary using bullet points.
-                    3. **⏱️ Key Timestamps**: Important moments with timestamps (MM:SS format) if applicable.
-                    
-                    User Context: ${customPrompt.ifBlank { "None" }}
-                    
+                    3. **⏱️ Key Timestamps**: Important moments with timestamps (MM:SS format) when applicable.
+
                     Format your response in clean Markdown.
                 """.trimIndent()
 
-                // Build multimodal content: video file + text prompt
-                // This tells Gemini to actually WATCH the video, not just guess from the URL
-                val inputContent = content {
-                    fileData(uri = youtubeUrl, mimeType = "video/*")
-                    text(promptText)
-                }
+                val userMessage = """
+                    YouTube URL: https://www.youtube.com/watch?v=$videoId
 
-                val response = generativeModel.generateContent(inputContent)
+                    TRANSCRIPT:
+                    $transcript
 
-                response.text?.let { result ->
-                    _uiState.value = CruxUiState.Success(result)
-                } ?: run {
-                    _uiState.value = CruxUiState.Error("Received an empty response.")
-                }
+                    User Context: ${customPrompt.ifBlank { "None" }}
+                """.trimIndent()
+
+                val result = anthropic.createMessage(systemPrompt, userMessage)
+                _uiState.value = CruxUiState.Success(result)
             } catch (e: Exception) {
                 _uiState.value = CruxUiState.Error(e.localizedMessage ?: "Unknown error occurred")
             }
